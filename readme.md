@@ -1,104 +1,67 @@
-# PABAK Interpretation Framework Project
+# GRASS: Guide for Rater Agreement under Structural Skew
 
 ## Overview
-This project develops a practitioner-focused, simulation-calibrated framework for interpreting PABAK in the presence of varying prevalence and rater bias conditions.
 
----
+GRASS is a four-step interpretation protocol for binary inter-rater agreement metrics. It replaces fixed qualitative labels (e.g., Landis-Koch) with prevalence-conditioned thresholds that account for how prevalence affects Cohen's kappa, PABAK, and Gwet's AC1.
 
-## Phase 1: Literature Grounding
-- [ ] Compile foundational papers (Landis & Koch, Byrt et al., Chen et al.)
-- [ ] Summarize existing interpretation scales for kappa
-- [ ] Identify how PABAK has been used and interpreted in practice
-- [ ] Document gaps in interpretation guidance for PABAK
-- [ ] Draft literature review section
+The framework addresses a well-documented problem: the same raters can receive different qualitative labels depending on the prevalence of the condition being rated, even when their diagnostic accuracy is unchanged.
 
----
+## Simulation
 
-## Phase 2: Conceptual Framing
-- [ ] Define “true agreement” via data-generating process (not via kappa/PABAK)
-- [ ] Specify key dimensions:
-  - Prevalence
-  - Rater bias / marginal imbalance
-  - Sample size
-  - Agreement level (low / medium / high)
-- [ ] Define evaluation metrics:
-  - Bias
-  - Variance
-  - Divergence between kappa and PABAK
-  - Rank reversals
-- [ ] Draft conceptual framework section
+The evidence base is a full-factorial Monte Carlo simulation:
 
----
+- **38 rater profiles** spanning symmetric, within-rater asymmetric, between-rater asymmetric, and opposite-bias configurations
+- **23 prevalence levels** (0.01 to 0.99 at 0.05 spacing, plus 0.48 and 0.52)
+- **5 sample sizes** (10, 50, 100, 500, 1000)
+- **4,370 scenarios**, each with 5,000–20,000 replications
+- **24.1 million total replications**
 
-## Phase 3: Simulation Design
-- [ ] Build synthetic data generator
-- [ ] Create grid of experimental conditions
-- [ ] Run Monte Carlo simulations across:
-  - Multiple prevalence levels
-  - Multiple bias levels
-  - Multiple agreement levels
-- [ ] Store outputs (Po, kappa, PABAK, marginals)
-- [ ] Validate simulation behavior
+## Repository Structure
 
----
+```
+R/                          Core simulation functions
+  00_packages.R             Package loading
+  01_data_generating.R      Binary rating data generator
+  02_metrics.R              Agreement metric computation (kappa, PABAK, AC1, etc.)
+  03_ground_truth.R         Theoretical ground truth and quality bands
+  04_grid.R                 Parameter grid construction
+  05_runner.R               Parallel simulation orchestration
+  06_threshold_derivation.R ROC-optimal threshold derivation
 
-## Phase 4: Analysis
-- [ ] Compare kappa vs PABAK across scenarios
-- [ ] Identify divergence patterns
-- [ ] Classify “interpretation zones”:
-  - Stable agreement
-  - Prevalence-sensitive
-  - Bias-sensitive
-  - Low agreement
-- [ ] Quantify frequency of misleading interpretations
-- [ ] Generate visualizations (heatmaps, surfaces)
+scripts/                    Analysis and visualization scripts
+  run_unified_sim.R         Main simulation (config_unified.yaml)
+  run_unified_analysis.R    Threshold derivation, classification accuracy, figures
+  run_unified_figures.R     Publication-quality figure generation
+  run_unified_reviewer_analyses.R  Jackknife stability, CI coverage, sensitivity
 
----
+config_unified.yaml         Master configuration (profiles, prevalences, sample sizes)
+figures/                    Publication-ready figures
+output/                     Simulation results and derived thresholds
+```
 
-## Phase 5: Practitioner Framework
-- [ ] Develop simple decision framework
-- [ ] Create “4-number panel” reporting recommendation
-- [ ] Define interpretation zones clearly
-- [ ] Draft plain-language guidance
-- [ ] Design one-page practitioner guide
+## Reproducing Results
 
----
+```bash
+# Run the full simulation (~30 minutes on 15 cores)
+Rscript scripts/run_unified_sim.R
 
-## Phase 6: Writing & Positioning
-- [ ] Draft introduction (problem + gap)
-- [ ] Position contribution:
-  - Not new metric
-  - New interpretation framework
-- [ ] Write methods (simulation design)
-- [ ] Write results (patterns + zones)
-- [ ] Write discussion (when PABAK is useful vs misleading)
-- [ ] Identify target journal
+# Derive thresholds and generate figures
+Rscript scripts/run_unified_analysis.R
 
----
+# Jackknife stability, CI coverage, sensitivity analysis
+Rscript scripts/run_unified_reviewer_analyses.R
 
-## Potential Research Questions
+# Regenerate all publication figures
+Rscript scripts/run_unified_figures.R
+```
 
-### Core Questions
-- Under what conditions does PABAK accurately reflect true agreement?
-- When does PABAK diverge from Cohen’s kappa in a meaningful way?
-- Can stable interpretation zones for PABAK be empirically derived?
+## Key Findings
 
-### Comparative Questions
-- When does PABAK improve interpretability relative to kappa?
-- When does PABAK obscure meaningful disagreement?
-- How often do PABAK and kappa lead to different conclusions?
+- Landis-Koch labels produce consistent classifications at balanced prevalence (100% of 1,330 scenarios) but only 36.1% consistency at extreme prevalence (412 of 1,140 scenarios)
+- With GRASS prevalence-conditioned thresholds, the three metrics agree on classification in 98.4% of scenarios
+- Under bias dominance (BI > PI), all three metrics agree in 100% of scenarios — GRASS does not require bias conditioning
+- All 72 discordant scenarios occur in the prevalence-dominant regime at extreme prevalence with small sample sizes
 
-### Structural Questions
-- How does prevalence influence PABAK behavior?
-- How does rater bias impact agreement metrics differently?
-- What role does sample size play in stability of PABAK?
+## Authors
 
-### Practical Questions
-- What minimal set of statistics should practitioners report?
-- Can a simple decision framework replace arbitrary threshold scales?
-- How can interpretation be simplified without losing rigor?
-
-### Extension Opportunities
-- Extend framework to multi-rater settings
-- Compare with alternative metrics (e.g., AC1)
-- Apply framework to real-world datasets
+Austin D. Semmel and Rachel Gidaro
