@@ -1,0 +1,89 @@
+---
+title: "The grass ecosystem"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The grass ecosystem}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## One package, one entry point
+
+`grass` is a single package with a single user-facing reporting call:
+
+```{r eval=FALSE}
+grass_report(data, spec = grass_spec_binary(), ...)
+```
+
+The `spec` argument selects the metric family. Today only
+`grass_spec_binary()` returns a usable spec; the other constructors
+(`grass_spec_ordinal()`, `grass_spec_multirater()`,
+`grass_spec_continuous()`) are placeholders that produce valid spec
+objects but error with a pointer to `?grass_roadmap` when passed to
+`grass_report()`. This is deliberate: users can read the planned API
+and write code that will be ready for the release, without the package
+pretending to compute numbers it cannot yet compute.
+
+## Why one package, many families
+
+Inter-rater and test-retest reliability are not one problem. A binary
+diagnosis, an ordinal severity scale, a continuous assay, and the
+internal consistency of a survey each live in a different statistical
+literature with a different reference standard. The `grass` framework
+treats them as branches of a common problem — "what value should this
+agreement coefficient take given the study's actual parameters?" — and
+attaches a prevalence-conditioned reference curve to each.
+
+The alternative, a package per family, fragments the user's workflow
+without improving the science. A one-package design with internal
+dispatch means:
+
+* Existing user code does not change when a new family lands.
+* The same verbs — `grass_methods()`, `grass_format_report()`,
+  `plot()`, `tidy()` — apply across every family.
+* The user does not have to remember which package exports what.
+
+The framework labels *GRASS*, *TURF*, *MEADOW*, *FIELD* exist in the
+paper and in `?grass_roadmap` as organising concepts. They never
+appear as function prefixes the user has to learn.
+
+## Today: the binary family
+
+```{r}
+library(grass)
+tab <- matrix(c(88, 10, 14, 88), nrow = 2,
+              dimnames = list(R1 = c("0","1"), R2 = c("0","1")))
+r <- grass_report(tab, format = "matrix",
+                  spec = grass_spec_binary(reference_level = 0.85))
+r
+```
+
+`reference_level` is the Se = Sp operating point on the analytical
+diagonal. Four bands ship — 0.70, 0.80, 0.85, 0.90 — each defined in
+closed form under conditional independence of the two raters given the
+true class.
+
+## Manuscript-ready methods paragraph
+
+```{r}
+cat(grass_methods(r))
+```
+
+The paragraph is GRRAS-compliant (Guidelines for Reporting Reliability
+and Agreement Studies), fills in the study's numbers, and is safe to
+paste into an `.Rmd` or LaTeX manuscript. When the ordinal, multirater,
+or continuous families ship, each implements its own
+`grass_methods()` method with the paragraph appropriate to that
+design; the user call does not change.
+
+## Tomorrow: the rest of the framework
+
+`?grass_roadmap` lays out the planned families. The release cadence is
+one paper and one minor release per family. Every family shares the
+core commitment: the interpretation of an agreement coefficient must be
+conditioned on the study's actual parameters (prevalence, design,
+scale), not applied from a fixed 1977 cutoff table.

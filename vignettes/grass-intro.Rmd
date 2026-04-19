@@ -1,0 +1,136 @@
+---
+title: "Introduction to grass: prevalence-aware agreement interpretation"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to grass: prevalence-aware agreement interpretation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  dpi = 110
+)
+library(grass)
+```
+
+## What `grass` does
+
+`grass` computes Cohen's κ, PABAK, and Gwet's AC1 for binary inter-rater
+agreement and reports them alongside their **context** — the prevalence
+of the positive class, the bias between raters, and simulation-derived
+reference curves that show where each metric tends to land for competent
+raters across prevalence.
+
+The explicit design goal is to move practice away from fixed qualitative
+labels (Landis-Koch and its siblings) and toward a reporting habit that
+includes prevalence and bias alongside the agreement metric.
+
+## A balanced example: Cohen (1960) Table 1
+
+Two raters each classify 200 subjects as 0 or 1 on a single binary trait.
+
+```{r}
+tab <- matrix(c(88, 10, 14, 88), nrow = 2,
+              dimnames = list(R1 = c("0", "1"), R2 = c("0", "1")))
+tab
+
+result <- grass_report(tab, format = "matrix")
+result
+```
+
+All three metrics agree (all ≈ 0.76) because prevalence is near 0.5 and
+bias is negligible. The regime label is `balanced`. Nothing surprising
+happens when the 2×2 is symmetric; the three metrics track each other.
+
+## A low-prevalence worked example
+
+A rare positive class. 50 subjects, 5 of them positive.
+
+```{r}
+tab_rare <- matrix(c(40, 5, 5, 0), nrow = 2,
+                   dimnames = list(R1 = c("0", "1"), R2 = c("0", "1")))
+result_rare <- grass_report(tab_rare, format = "matrix")
+result_rare
+```
+
+Observed agreement is 80%. κ is *negative*, because expected agreement
+under marginal independence is higher than what was observed. PABAK reports
+0.60. AC1 reports 0.76. Three metrics, three different numbers, same data.
+
+The package reports regime = `prevalence-dominated` and the signed
+distance of each metric from the reference curve. The framework asks for
+*reporting the three metrics together with PI, BI, and the regime*.
+Reporting κ alone would classify these raters as poor; reporting PABAK
+alone would classify them as substantial. Neither claim is defensible
+on its own.
+
+## The landing plot
+
+```{r, eval = requireNamespace("ggplot2", quietly = TRUE)}
+plot(result_rare)
+```
+
+Three curves show where κ, PABAK, and AC1 tend to fall across prevalence
+for raters at the calibrated quality level. The three points show where
+*this* study lands. Reading the plot is qualitative and visual — the user
+does the interpretation, the package does the bookkeeping.
+
+## The regime plot
+
+```{r, eval = requireNamespace("ggplot2", quietly = TRUE)}
+plot(result_rare, type = "regime")
+```
+
+Axes are `PI²` and `BI²`. Points above the diagonal have bias dominating;
+points below have prevalence dominating; points near the origin are balanced.
+The Feinstein-Cicchetti example sits deep in the prevalence-dominated half.
+
+## Input formats
+
+All four shapes give identical metrics:
+
+```{r}
+r1 <- c(rep(0, 40), rep(0, 5), rep(1, 5))
+r2 <- c(rep(0, 40), rep(1, 5), rep(0, 5))
+
+grass_compute(list(r1, r2), format = "paired")$values["kappa"]
+grass_compute(data.frame(r1 = r1, r2 = r2), format = "wide")$values["kappa"]
+
+long_df <- data.frame(
+  subject = rep(seq_along(r1), 2),
+  rater   = rep(c("r1", "r2"), each = length(r1)),
+  rating  = c(r1, r2)
+)
+grass_compute(long_df, format = "long")$values["kappa"]
+```
+
+Factors and character vectors are coerced to 0/1 silently with a one-time
+message identifying which level was mapped to the positive class. Override
+with `positive =`.
+
+## What to report in a paper
+
+For any binary inter-rater agreement study:
+
+1. Cohen's κ with its CI (Wilson-logit preferred — it respects the
+   `[-1, 1]` bound at small N).
+2. PABAK.
+3. Gwet's AC1.
+4. Prevalence index (PI) and bias index (BI).
+5. The regime label.
+
+`as.data.frame(grass_report(...))` gives these as a one-row data.frame
+ready to bind to a results table.
+
+## References
+
+- Byrt T, Bishop J, Carlin JB. *Bias, prevalence and kappa.* J Clin Epidemiol. 1993; 46(5):423–429.
+- Cohen J. *A coefficient of agreement for nominal scales.* Educ Psychol Meas. 1960; 20(1):37–46.
+- Feinstein AR, Cicchetti DV. *High agreement but low kappa: I. The problems of two paradoxes.* J Clin Epidemiol. 1990; 43(6):543–549.
+- Gwet KL. *Computing inter-rater reliability and its variance in the presence of high agreement.* Br J Math Stat Psychol. 2008; 61(1):29–48.
+- Landis JR, Koch GG. *The measurement of observer agreement for categorical data.* Biometrics. 1977; 33(1):159–174.

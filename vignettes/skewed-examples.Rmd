@@ -1,0 +1,143 @@
+---
+title: "Worked examples of skewed agreement"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Worked examples of skewed agreement}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
+                      fig.width = 7, fig.height = 4.5, dpi = 110)
+library(grass)
+```
+
+## Example 1: Extreme prevalence, high PABAK, near-zero kappa
+
+Byrt-Bishop-Carlin regime. N = 125, and 120 of 125 raw decisions fall in
+the negative class.
+
+```{r}
+tab <- matrix(c(118, 2, 5, 0), nrow = 2,
+              dimnames = list(R1 = c("0", "1"), R2 = c("0", "1")))
+result <- grass_report(tab, format = "matrix")
+result
+```
+
+PABAK reports 0.89, κ reports nearly zero, AC1 lands near 0.94. The regime
+is `prevalence-dominated`. The raters have essentially never been tested on
+the minority class, so high PABAK does not imply substantial agreement —
+it implies there is nothing to disagree about. Report all three metrics
+together with PI, and the reader can form their own judgment.
+
+## Example 2: Low prevalence, high observed agreement, negative kappa
+
+```{r}
+tab <- matrix(c(40, 5, 5, 0), nrow = 2,
+              dimnames = list(R1 = c("0", "1"), R2 = c("0", "1")))
+result <- grass_report(tab, format = "matrix")
+result
+```
+
+80% observed agreement, κ = −0.11. A fixed-cutoff scheme like Landis-Koch
+would classify these raters as "poor" on the strength of κ alone. The
+GRASS report shows why κ is structurally suppressed here: PI = 0.80 and
+the regime is prevalence-dominated.
+
+## Example 3: Bias between raters
+
+```{r}
+tab <- matrix(c(60, 10, 25, 5), nrow = 2,
+              dimnames = list(R1 = c("0", "1"), R2 = c("0", "1")))
+result <- grass_report(tab, format = "matrix")
+result
+```
+
+The off-diagonal asymmetry (25 vs 10) drives a non-trivial bias index. In
+this regime the appropriate response is a calibration session between
+raters, not more training on hard cases.
+
+```{r, eval = requireNamespace("ggplot2", quietly = TRUE)}
+plot(result, type = "regime")
+```
+
+## Is the drift from N or from structure?
+
+A natural question when you see a study plotted on a reference curve:
+the observed points land *off* the lines — is that because the sample is
+small, or because something structural is going on?
+
+Short answer: **small N widens the scatter; prevalence drives the
+drift.** The two effects are separable, and you can see the separation
+directly. We compare the same data-generating process at small N vs
+large N, then the same small N at balanced vs skewed prevalence.
+
+```{r}
+# Helper: simulate two raters at Se = Sp = q against a latent truth.
+draw <- function(n, p, q, seed = 1) {
+  set.seed(seed)
+  truth <- rbinom(n, 1, p)
+  r1 <- ifelse(truth == 1, rbinom(n, 1, q), rbinom(n, 1, 1 - q))
+  r2 <- ifelse(truth == 1, rbinom(n, 1, q), rbinom(n, 1, 1 - q))
+  data.frame(r1 = r1, r2 = r2)
+}
+```
+
+### Same skew, different N
+
+Same prevalence (p = 0.10), same rater quality (Se = Sp = 0.85),
+different sample sizes. The observed points stay in roughly the same
+spot relative to the reference lines — kappa below, PABAK/AC1 above —
+and the spot does not chase zero as N grows. N tightens the scatter
+but does not explain the drift.
+
+```{r fig.show = "hold", out.width = "50%", fig.height = 4.2, eval = requireNamespace("ggplot2", quietly = TRUE)}
+r_small <- grass_report(draw(n =  50, p = 0.10, q = 0.85), reference = "high")
+r_large <- grass_report(draw(n = 500, p = 0.10, q = 0.85), reference = "high")
+plot(r_small, labels = "legend") + ggplot2::labs(title = "N = 50")
+plot(r_large, labels = "legend") + ggplot2::labs(title = "N = 500")
+```
+
+The deltas between observed and reference are driven by the *structure*
+of the problem at p = 0.10 (kappa getting squeezed by its chance term),
+not by the 50-vs-500 sample size.
+
+### Same N, different prevalence
+
+Now hold N = 50 constant but move prevalence from 0.10 (skewed) to 0.50
+(balanced). At balanced prevalence the three metrics collapse toward
+each other and toward their reference curves. The earlier "kappa low,
+PABAK/AC1 high" pattern vanishes — it was a prevalence effect, not a
+noise effect.
+
+```{r fig.show = "hold", out.width = "50%", fig.height = 4.2, eval = requireNamespace("ggplot2", quietly = TRUE)}
+r_skew <- grass_report(draw(n = 50, p = 0.10, q = 0.85), reference = "high")
+r_bal  <- grass_report(draw(n = 50, p = 0.50, q = 0.85), reference = "high")
+plot(r_skew, labels = "legend") + ggplot2::labs(title = "Prevalence = 0.10 (skewed)")
+plot(r_bal,  labels = "legend") + ggplot2::labs(title = "Prevalence = 0.50 (balanced)")
+```
+
+### Takeaway
+
+When the three metrics land in visibly different positions relative to
+their reference curves, that is the algebra of the prevalence regime —
+not a signal that you need more data. Increasing N will tighten each
+point toward its own reference, but it will not line them up with each
+other. Report all three with PI, BI, and the regime label, and the
+reader can tell which effect is which.
+
+## What to report
+
+Always together:
+
+1. Cohen's κ (with a CI that respects the `[-1, 1]` bound at small N)
+2. PABAK
+3. Gwet's AC1
+4. Prevalence index (PI)
+5. Bias index (BI)
+6. The regime label
+
+`grass_format_report(result)` produces a one-line version of the same
+information suitable for pasting into a manuscript sentence or a results
+table cell.
