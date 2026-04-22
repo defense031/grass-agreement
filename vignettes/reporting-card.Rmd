@@ -1,0 +1,203 @@
+---
+title: "The GRASS Reporting Card: two-column tier labels"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The GRASS Reporting Card: two-column tier labels}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
+                      fig.width = 7, fig.height = 4.5, dpi = 110)
+library(grass)
+```
+
+*Preview vignette for the §8 Reporting Card of the merged GRASS binary-
+rater-reliability paper. The two functions exercised below — `check_asymmetry()`
+and `classify()` — ship with `grass` 0.2.x. Tier definitions follow
+`paper2/review/framework_notes.md` §0.6 (Column A, three-tier model safety)
+and §0.6.5 ("Labels without re-creating Landis-Koch"; Column B, five-tier
+use-case fit).*
+
+## What a Reporting Card row looks like
+
+Every panel reported under the GRASS framework carries **two orthogonal
+tier columns** alongside the arithmetic:
+
+- **Column A (model safety)** — is `q̂` trustworthy as the primary summary?
+  Assigned by `check_asymmetry()` from per-rater `(Ŝe_j, Ŝp_j)` estimates:
+  `ok` (δ̂ < 0.05), `caution` (0.05–0.10), or `unsafe` (≥ 0.10). At Tier 3
+  the Se = Sp diagonal is visibly broken and the panel needs a latent-class
+  fit rather than a single `q̂`.
+- **Column B (use-case fit)** — does the panel meet its *declared* use
+  case? Assigned by `classify()` from the 95% CI on **EMR_panel** (the
+  expected rate at which the panel's majority-vote decision disagrees with
+  the latent class) against a tolerance `T` drawn from the use-case ladder.
+  Five tiers: `Fails`, `Indeterminate`, `Meets`, `Met with distinction`
+  (upper CI below `T/2`), `Exceeds` (upper CI below the next harder use
+  case's tolerance).
+
+The columns are independent: a panel can be `ok + Met with distinction`
+(the common case), `caution + Meets` (asymmetry-flagged but still passes),
+or `unsafe + Exceeds` (latent-class fit needed, but the panel already
+clears a harder use case once the fit is trusted).
+
+## Worked example 1: a screening panel, symmetric raters
+
+Five radiologists independently score the same 50 chest films for a
+binary screening-eligibility endpoint. A simulation-calibrated latent-
+class fit gives per-rater sensitivity and specificity:
+
+```{r}
+se <- c(R1 = 0.88, R2 = 0.86, R3 = 0.89, R4 = 0.87, R5 = 0.85)
+sp <- c(R1 = 0.86, R2 = 0.87, R3 = 0.88, R4 = 0.85, R5 = 0.86)
+```
+
+### Column A: is the Se = Sp diagonal defensible?
+
+```{r}
+safety <- check_asymmetry(se = se, sp = sp, rater = names(se))
+safety
+```
+
+The largest per-rater gap is 0.03, below the `caution` threshold of 0.05,
+so the panel sits at **Tier 1 (`ok`)**. We may report `q̂ ± SE` plus EDR and
+EMR_panel without per-rater disclosure; PABAK's prevalence-flatness
+assumption holds.
+
+### Column B: does the panel meet the screening use case?
+
+Under Tier 1 the panel's operating quality is `q̂ ≈ 0.87` with SE ≈ 0.02
+(Wilson-logit); the panel-level misclassification rate under 5-rater
+majority vote and its 95% CI are derived from `q̂` and `k`:
+
+```{r}
+q_hat <- 0.87
+emr_point <- emr_panel(q = q_hat, k = 5)
+# Rough 95% CI on EMR via propagating q_hat ± 1.96 * 0.02 through emr_panel()
+emr_lo <- emr_panel(q = q_hat + 1.96 * 0.02, k = 5)  # lower EMR = upper q
+emr_hi <- emr_panel(q = q_hat - 1.96 * 0.02, k = 5)  # upper EMR = lower q
+c(point = emr_point, lower = emr_lo, upper = emr_hi)
+```
+
+Hold the panel to the declared screening tolerance `T = 0.10`:
+
+```{r}
+verdict <- classify(emr_upper = emr_hi, emr_lower = emr_lo,
+                    emr_point = emr_point,
+                    use_case = "screening",
+                    regime = safety)
+verdict
+```
+
+`Exceeds`: the upper CI on EMR_panel (`r sprintf("%.3f", emr_hi)`) lies
+below the diagnostic tolerance `T_next = 0.05`, so the panel would also
+clear the next step up the ladder. `Exceeds` is the only tier that
+licenses *promoting* the panel's declared use case — the label points to
+a specific operational consequence, not an adjective.
+
+### ### The citation sentence
+
+Every label must appear with its arithmetic — that is what keeps the
+label system citable without repeating the Landis-Koch error of
+stipulative, regime-free cutoffs:
+
+```{r citation, results = "asis", echo = FALSE}
+cat(sprintf(paste0(
+  "> *\"The rater panel exceeded the GRASS screening tier ",
+  "(q_hat = 0.87 +/- 0.02; EMR_panel = %.3f at k = 5 majority vote, ",
+  "95%% CI [%.3f, %.3f]; declared tolerance T = 0.10, ",
+  "margin %.3f; panel would also clear the diagnostic tolerance ",
+  "T_next = 0.05; inter-rater axis; N = 50; ",
+  "Tier 1 model safety per check_asymmetry() delta_hat = %.3f).\"*"),
+  emr_point, emr_lo, emr_hi, verdict$margin, safety$delta_hat))
+```
+
+Reads like a qualitative verdict; every adjective is reconstructible.
+
+## Worked example 2: smaller pilot, flagged asymmetry, harder use case
+
+Now suppose the same five readers have been re-fielded for a *diagnostic*
+use case (tolerance `T = 0.05`). Two changes: the calibration pilot is
+only `N = 20` films (so SE on `q̂` is roughly doubled to `0.04`), and
+one rater has drifted into a visible Se-favoring asymmetry (a known
+quirk of the reading protocol when on shift > 10 hours).
+
+```{r}
+se2 <- c(R1 = 0.88, R2 = 0.86, R3 = 0.93, R4 = 0.87, R5 = 0.85)
+sp2 <- c(R1 = 0.86, R2 = 0.87, R3 = 0.84, R4 = 0.85, R5 = 0.86)
+
+safety2 <- check_asymmetry(se = se2, sp = sp2, rater = names(se2))
+safety2
+```
+
+R3's gap of 0.09 is below the `unsafe` threshold but above `caution`, so
+the panel sits at **Tier 2**. `q̂` remains reportable as the primary
+summary but must carry a caution flag and the `δ̂` value; R3's asymmetry
+is disclosed so readers can weigh it.
+
+```{r}
+# Wider CI from the smaller pilot
+emr_lo2 <- emr_panel(q = q_hat + 1.96 * 0.04, k = 5)
+emr_hi2 <- emr_panel(q = q_hat - 1.96 * 0.04, k = 5)
+c(lower = emr_lo2, upper = emr_hi2)
+
+verdict2 <- classify(emr_upper = emr_hi2, emr_lower = emr_lo2,
+                     emr_point = emr_point,
+                     use_case = "diagnostic",
+                     regime = safety2)
+verdict2
+```
+
+`Indeterminate`: the 95% CI on EMR_panel straddles `T = 0.05` — the
+point estimate is good, but the pilot is too thin to resolve whether the
+panel is below or above the diagnostic tolerance. The operational action
+is **not** "fail" — it is "collect more data". Either more subjects
+(tighten the CI) or more raters (raise k, drop EMR_panel). The same
+panel that `Exceeds` the screening tolerance can be honestly called
+`Indeterminate` for diagnostic use; that is exactly the regime-conditioned
+behaviour the Landis-Koch scheme cannot express.
+
+## Assembling a two-row Reporting Card
+
+Both verdicts bind cleanly into a single results table:
+
+```{r}
+card <- rbind(
+  cbind(row_label = "Screening (N = 50)", as.data.frame(verdict)),
+  cbind(row_label = "Diagnostic pilot (N = 20)", as.data.frame(verdict2))
+)
+card[, c("row_label", "use_case", "tolerance", "emr_upper",
+         "margin", "tier", "column_a_tier", "column_a_regime")]
+```
+
+That data.frame is the literal object the §8 Reporting Card renders in
+the paper.
+
+## What the framework commits to
+
+1. **Labels live on EMR_panel**, not on any individual agreement
+   coefficient. κ / PABAK / AC1 / α / ICC all feed `q̂` upstream;
+   `q̂` and `k` feed EMR_panel; only EMR_panel's CI against `T` assigns
+   the use-case tier.
+2. **T is declared, not stipulated**, and comes from use-case precedent
+   (see [`grass_use_case_ladder()`](../reference/grass_use_case_ladder.html))
+   or from the practitioner with explicit disclosure.
+3. **"With distinction" means margin within the declared use case**;
+   **"Exceeds" means the panel would pass a harder use case**. The
+   distinction is load-bearing, not cosmetic — only `Exceeds` licenses
+   promoting the panel one step up the ladder.
+4. **Every label appears with its arithmetic.** A reviewer who asks
+   *"with distinction under what conditions?"* finds the answer in the
+   parenthetical.
+
+## Further reading
+
+- `paper2/review/framework_notes.md` §0.6, §0.6.5 — the argument for why
+  a label system that sits on EMR_panel with declared tolerances does
+  not re-create Landis-Koch (1977) or Koo-Li (2016).
+- `paper2/review/merged_paper_scope.md` — §8 Reporting Card in the full
+  paper scope.
+- `vignette("grass-intro")` — the Column-A-free inter-rater workflow
+  that the Reporting Card slots on top of.

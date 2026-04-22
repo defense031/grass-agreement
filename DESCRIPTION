@@ -1,7 +1,7 @@
 Package: grass
 Type: Package
 Title: Prevalence-Aware Interpretation of Binary Inter-Rater Agreement
-Version: 0.1.2
+Version: 0.2.0.9000
 Authors@R: c(
     person("Austin", "Semmel", email = "runfast031@gmail.com",
            role = c("aut", "cre")),

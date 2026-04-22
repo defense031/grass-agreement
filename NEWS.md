@@ -1,4 +1,38 @@
-# grass 0.1.2 (development)
+# grass 0.2.0 (development)
+
+Reporting Card — Column A and Column B tier assignment.
+
+## New features
+
+* **`check_asymmetry(se, sp, ...)`** — Column A of the §8 Reporting Card
+  in the merged GRASS binary-rater-reliability paper. Takes per-rater
+  sensitivity and specificity estimates, computes the scalar `δ̂`
+  summary of per-rater `|Ŝe_j − Ŝp_j|` gaps, and assigns the model-safety
+  tier (`ok` / `caution` / `unsafe`) at 0.05 / 0.10 thresholds. Governs
+  whether `q̂` (the GRASS operating-quality projection onto the
+  Se = Sp diagonal) is trustworthy as the primary summary.
+* **`classify(emr_upper, emr_lower, use_case, ...)`** — Column B of the
+  §8 Reporting Card. Partitions the 95% CI on `EMR_panel` against a
+  declared use-case tolerance `T` into five tiers: `Fails`,
+  `Indeterminate`, `Meets`, `Met with distinction` (upper CI below
+  `T/2`), and `Exceeds` (upper CI below the next-harder use case's
+  tolerance). See `?classify` for the full partition and
+  `paper2/review/framework_notes.md` §0.6.5 for why this label system
+  does not re-create Landis-Koch (1977).
+* **`grass_use_case_ladder()`** — returns the illustrative tolerance
+  ladder (research 0.15 / screening 0.10 / diagnostic 0.05 / clinical
+  0.02). The MEADOW Field Guide is the canonical source; practitioners
+  may declare custom tolerances with explicit disclosure.
+* **`emr_panel(q, k)`** — panel-level misclassification rate under
+  `k`-rater majority vote at `Se = Sp = q`. Closed form via `pbinom()`.
+* **"The GRASS Reporting Card: two-column tier labels"** vignette —
+  worked example for a screening panel at `N = 50` and a stress-test
+  diagnostic pilot at `N = 20`, with the full citation sentence Rachel
+  flagged as the load-bearing output.
+
+---
+
+# grass 0.1.2
 
 Round 5 — spec-dispatch architecture + reviewer 5/5 items.
 
